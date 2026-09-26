@@ -219,6 +219,8 @@ if __name__ == "__main__":
           "expressions:", FaceService.list_available_expressions()[:20])
     zs = [(human.matrix_world @ v.co).z for v in human.data.vertices]
     print("[JANIE] height m:", round(max(zs) - min(zs), 3), "head z", round(hh.z, 3))
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "janie.blend"))
+    # absolute texture paths: the MPFB assets live outside the project, so relative paths break if the project moves
+    bpy.ops.file.make_paths_absolute()
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "janie.blend"), relative_remap=False)
     if "preview" in sys.argv:
         preview(human, rig, hair, top)
