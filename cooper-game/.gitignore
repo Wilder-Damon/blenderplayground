@@ -1,0 +1,8 @@
+﻿# Godot import cache and exports
+.godot/
+*.import
+export/
+# Generated from ../janiecooper/export_game_assets.py (large binaries)
+assets/*.glb
+*.log
+captures/
