@@ -1,4 +1,4 @@
-﻿"""Janie & Cooper at Niguel Heights Park - final shot.
+"""Janie & Cooper at Niguel Heights Park - final shot.
 
 Run on park.blend:  blender --background park.blend --python final_scene.py -- [stills|render]
 Map data (c) OpenStreetMap contributors, ODbL.
@@ -253,8 +253,8 @@ fac = mx.inputs["Fac"]
 fac.default_value = 0.0; fac.keyframe_insert("default_value", frame=205)
 fac.default_value = 1.0; fac.keyframe_insert("default_value", frame=240)
 title = text_obj("Janie & Cooper", 0.062, (0, 0.175, -1.0))
-sub = text_obj("Niguel Heights Park  Â·  Laguna Niguel", 0.024, (0, 0.125, -1.0))
-credit = text_obj("Map data Â© OpenStreetMap contributors", 0.012, (0.37, -0.2, -1.0), "RIGHT")
+sub = text_obj("Niguel Heights Park  ·  Laguna Niguel", 0.024, (0, 0.125, -1.0))
+credit = text_obj("Map data © OpenStreetMap contributors", 0.012, (0.37, -0.2, -1.0), "RIGHT")
 for t in (title, sub, credit):
     t.data.materials.append(tm)
 # soft drop shadow behind the title lines so they read against the bright sky
