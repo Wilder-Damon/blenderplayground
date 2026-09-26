@@ -253,6 +253,15 @@ func _setup_hud() -> void:
 
 func _apply_quality() -> void:
 	var vp := get_viewport()
+	if OS.has_feature("web"):
+		# Browser (WebGL 2 / Compatibility renderer): no FSR 2 or SSAO; lower resolution scale is the main lever
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		vp.scaling_3d_scale = [0.6, 0.8, 1.0][quality]
+		vp.msaa_3d = Viewport.MSAA_DISABLED if quality == 0 else Viewport.MSAA_2X
+		_env.ssao_enabled = false
+		_env.glow_enabled = quality > 0
+		_sun.directional_shadow_max_distance = [50.0, 80.0, 110.0][quality]
+		return
 	match quality:
 		0:  # Fast: 50% resolution upscaled with FSR 2, light effects
 			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2

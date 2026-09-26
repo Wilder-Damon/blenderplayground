@@ -40,6 +40,21 @@ def flatten_procedural_materials():
 
 flatten_procedural_materials()
 
+MAX_TEX = int(os.environ.get("GAME_MAX_TEXTURE", "1024"))
+
+def shrink_textures(limit):
+    """Downscale big image textures (Janie's MakeHuman maps are 2-4K) so the web build stays small."""
+    for img in bpy.data.images:
+        if img.source != "FILE":
+            continue
+        w, h = img.size
+        if max(w, h) > limit:
+            s = limit / max(w, h)
+            img.scale(max(1, int(w * s)), max(1, int(h * s)))
+            print("[EXPORT] texture", img.name, f"{w}x{h} ->", tuple(img.size))
+
+shrink_textures(MAX_TEX)
+
 
 def select_only(objs):
     bpy.ops.object.select_all(action="DESELECT")

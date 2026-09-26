@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Janie & Cooper site: film page + the Godot web build (Workers static assets).
+  // Build: Godot "Web" export -> export/web/game, then tools/web_postprocess.py; site/index.html -> export/web/.
+  "name": "janie-cooper",
+  "compatibility_date": "2026-09-25",
+  "observability": { "enabled": true },
+  "assets": { "directory": "export/web" },
+  // Kept off until Cloudflare Access (family-only login) protects the site.
+  "workers_dev": false,
+  "preview_urls": false
+}
