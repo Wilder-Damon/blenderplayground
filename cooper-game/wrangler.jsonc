@@ -6,7 +6,7 @@
   "compatibility_date": "2026-09-25",
   "observability": { "enabled": true },
   "assets": { "directory": "export/web" },
-  // Protected by Cloudflare Access (Zero Trust app "janie-cooper": account members + Family emails).
+  // Public (Access login removed 2026-09-26 so it can be shared); re-add via the Worker's Access tab if needed.
   "workers_dev": true,
   "preview_urls": false
 }
