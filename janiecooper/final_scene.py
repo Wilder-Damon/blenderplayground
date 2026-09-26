@@ -1,4 +1,4 @@
-"""Janie & Cooper at Niguel Heights Park - final shot.
+﻿"""Janie & Cooper at Niguel Heights Park - final shot.
 
 Run on park.blend:  blender --background park.blend --python final_scene.py -- [stills|render]
 Map data (c) OpenStreetMap contributors, ODbL.
@@ -130,6 +130,81 @@ for f in range(1, FRAMES + 2, 2):
     crig.rotation_euler = (0, math.radians(0), heading - math.pi / 2)  # Cooper's rest pose faces +Y
     crig.keyframe_insert("location", frame=f); crig.keyframe_insert("rotation_euler", frame=f)
 
+# ------------------------------------------------ Cooper's beach ball: Janie tosses it ahead, it bounces and rolls, Cooper chases
+BALL_R = 0.20
+def beach_ball_material():
+    m = bpy.data.materials.new("BeachBall"); m.use_nodes = True
+    nt = m.node_tree; N = nt.nodes; L = nt.links
+    b = N["Principled BSDF"]; b.inputs["Roughness"].default_value = 0.25
+    tc = N.new("ShaderNodeTexCoord")
+    grad = N.new("ShaderNodeTexGradient"); grad.gradient_type = "RADIAL"   # angle around the ball's axis, 0..1
+    L.new(tc.outputs["Object"], grad.inputs["Vector"])
+    ramp = N.new("ShaderNodeValToRGB"); ramp.color_ramp.interpolation = "CONSTANT"
+    cols = [(0.95, 0.35, 0.05), (0.92, 0.9, 0.85), (0.85, 0.08, 0.06), (0.97, 0.72, 0.10), (0.92, 0.9, 0.85), (0.95, 0.35, 0.05)]
+    els = ramp.color_ramp.elements
+    els[0].position = 0.0; els[0].color = (*cols[0], 1)
+    els[1].position = 1 / 6; els[1].color = (*cols[1], 1)
+    for k in range(2, 6):
+        e = els.new(k / 6); e.color = (*cols[k], 1)
+    L.new(grad.outputs["Fac"], ramp.inputs["Fac"]); L.new(ramp.outputs["Color"], b.inputs["Base Color"])
+    return m
+
+bpy.ops.mesh.primitive_uv_sphere_add(radius=BALL_R, segments=48, ring_count=24)
+ball = bpy.context.active_object; ball.name = "BeachBall"
+bpy.ops.object.shade_smooth()
+ball.data.materials.append(beach_ball_material())
+ball_pivot = bpy.data.objects.new("BallPivot", None); sc.collection.objects.link(ball_pivot)
+ball.parent = ball_pivot; ball.location = (0, 0, 0)
+
+THROW, LAND = 118, 146                     # Janie releases at THROW, first bounce at LAND
+def ball_pos(f):
+    """Ball (x, y, z) and heading for frame f."""
+    dist_j = WALK_SPEED * (f - 1) / FPS
+    if f < THROW:                          # held at Janie's side (small, mostly hidden by her hand)
+        p, d = along(dist_j)
+        side = Vector((-d.y, d.x))
+        q = p - side * 0.22
+        return Vector((q.x, q.y, 0.95)), d
+    p_throw, d = along(WALK_SPEED * (THROW - 1) / FPS)
+    land_dist = WALK_SPEED * (THROW - 1) / FPS + 3.2
+    if f <= LAND:                          # arc from her hand to the path ahead
+        t = (f - THROW) / (LAND - THROW)
+        dd = WALK_SPEED * (THROW - 1) / FPS + 3.2 * t
+        p, d = along(dd)
+        z = (0.95 * (1 - t)) + BALL_R * t + 1.1 * math.sin(math.pi * t)
+        return Vector((p.x, p.y, z)), d
+    # after landing: rolls ahead, a couple of shrinking bounces, slowly let Cooper close in
+    t = (f - LAND) / FPS
+    dd = land_dist + WALK_SPEED * 0.85 * t + 0.6 * (1 - math.exp(-2.5 * t))
+    p, d = along(dd)
+    bounce = abs(math.sin(t * math.pi * 2.2)) * 0.35 * math.exp(-2.8 * t)
+    return Vector((p.x, p.y, BALL_R + bounce)), d
+
+prev = None; roll = 0.0
+for f in range(1, FRAMES + 2):
+    pos, d = ball_pos(f)
+    if prev is not None and f > THROW:
+        roll += (Vector((pos.x, pos.y)) - Vector((prev.x, prev.y))).length / BALL_R
+    prev = pos
+    ball_pivot.location = pos
+    ball_pivot.rotation_euler = (0, 0, math.atan2(d.y, d.x))
+    ball.rotation_euler = (0, roll, 0)      # roll about the pivot's sideways axis
+    if f % 2 == 1:
+        ball_pivot.keyframe_insert("location", frame=f); ball_pivot.keyframe_insert("rotation_euler", frame=f)
+        ball.keyframe_insert("rotation_euler", frame=f)
+
+# Cooper spots the ball and chases it: after the throw he pulls ahead of Janie toward it
+for f in range(THROW, FRAMES + 2, 2):
+    t = min(1.0, (f - THROW) / 40)
+    bp, d = ball_pos(f)
+    jp, _ = along(WALK_SPEED * (f - 1) / FPS)
+    target = Vector((bp.x, bp.y)) - d * 0.75                 # just behind the ball
+    home = jp + d * 0.35 - cam_side * 0.75
+    cp = home.lerp(target, t * 0.85)
+    crig.location = (cp.x, cp.y, 0.0)
+    crig.rotation_euler = (0, 0, math.atan2(d.y, d.x) - math.pi / 2)
+    crig.keyframe_insert("location", frame=f); crig.keyframe_insert("rotation_euler", frame=f)
+
 # ------------------------------------------------ camera: aerial glide down into a tracking shot
 target = bpy.data.objects.new("CamTarget", None); sc.collection.objects.link(target)
 cd = bpy.data.cameras.new("Hero"); cd.lens = 32; cd.clip_end = 3000
@@ -178,8 +253,8 @@ fac = mx.inputs["Fac"]
 fac.default_value = 0.0; fac.keyframe_insert("default_value", frame=205)
 fac.default_value = 1.0; fac.keyframe_insert("default_value", frame=240)
 title = text_obj("Janie & Cooper", 0.062, (0, 0.175, -1.0))
-sub = text_obj("Niguel Heights Park  ·  Laguna Niguel", 0.024, (0, 0.125, -1.0))
-credit = text_obj("Map data © OpenStreetMap contributors", 0.012, (0.37, -0.2, -1.0), "RIGHT")
+sub = text_obj("Niguel Heights Park  Â·  Laguna Niguel", 0.024, (0, 0.125, -1.0))
+credit = text_obj("Map data Â© OpenStreetMap contributors", 0.012, (0.37, -0.2, -1.0), "RIGHT")
 for t in (title, sub, credit):
     t.data.materials.append(tm)
 # soft drop shadow behind the title lines so they read against the bright sky

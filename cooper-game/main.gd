@@ -7,6 +7,7 @@ extends Node3D
 
 const CooperScript := preload("res://cooper.gd")
 const JanieScript := preload("res://janie.gd")
+const TouchScript := preload("res://touch_controls.gd")
 
 var cooper: CharacterBody3D
 var janie: Node3D
@@ -25,6 +26,9 @@ var _dbg_t := 0.0
 const QUALITY_NAMES := ["Fast", "Balanced", "Pretty"]
 var quality := 1
 var fps_label: Label
+var touch: Control
+var _hud_layer: CanvasLayer
+var _help: Label
 var _env: Environment
 var _sun: DirectionalLight3D
 
@@ -234,6 +238,11 @@ func _setup_hud() -> void:
 	help.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	help.add_theme_constant_override("outline_size", 6)
 	layer.add_child(help)
+	_hud_layer = layer
+	_help = help
+	if DisplayServer.is_touchscreen_available() or "--touch" in OS.get_cmdline_user_args():
+		_enable_touch()
+		quality = 0      # phones: favour smooth frame rate
 	fps_label = Label.new()
 	fps_label.anchor_left = 1.0; fps_label.anchor_right = 1.0
 	fps_label.offset_left = -360; fps_label.offset_right = -20; fps_label.offset_top = 18
@@ -304,6 +313,26 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 
+func _enable_touch() -> void:
+	# on-screen joystick + buttons; also switched on the first time the screen is touched,
+	# since some phones/browsers don't report a touchscreen at startup
+	if touch:
+		return
+	touch = Control.new()
+	touch.set_script(TouchScript)
+	_hud_layer.add_child(touch)
+	touch.hop.connect(func(): cooper.touch_hop = true)
+	_help.text = "Drag left side: waddle   Drag right side: camera   Buttons: zoomies / hop      Map data © OpenStreetMap contributors"
+
+
+func _input(event: InputEvent) -> void:
+	if touch == null and event is InputEventScreenTouch:
+		_enable_touch()
+		if quality != 0:
+			quality = 0
+			_apply_quality()
+
+
 func _update_score() -> void:
 	score_label.text = "Fetches: %d" % fetches
 
@@ -352,11 +381,23 @@ func _process(delta: float) -> void:
 		# camera looks from Cooper towards Janie, so the ball and Janie are both in view
 		var want := atan2(cooper.global_position.x - janie.global_position.x, cooper.global_position.z - janie.global_position.z)
 		cam_yaw = lerp_angle(cam_yaw, want, 1.5 * delta)
+	if touch:
+		cooper.touch_vector = touch.move
+		cooper.touch_zoomies = touch.zoomies
+		cam_yaw += touch.cam_drag
+		touch.cam_drag = 0.0
 	cooper.camera_yaw = cam_yaw
 	var offset := Vector3(0, 1.6, 3.6).rotated(Vector3.UP, cam_yaw)
 	var want_pos := cooper.global_position + offset
 	camera.global_position = camera.global_position.lerp(want_pos, clamp(5.0 * delta, 0.0, 1.0)) if camera.global_position != Vector3.ZERO else want_pos
 	camera.look_at(cooper.global_position + Vector3(0, 0.45, 0))
+	if touch:
+		var r := get_viewport().get_visible_rect().size
+		if r.y > r.x * 1.1:
+			toast.text = "Turn your phone sideways
+to play"
+			toast.modulate.a = 1.0
+			_toast_time = 0.5
 	if _toast_time > 0.0:
 		_toast_time -= delta
 		toast.modulate.a = clamp(_toast_time / 0.6, 0.0, 1.0)

@@ -8,6 +8,9 @@ const PUSH := 1.4
 
 var camera_yaw := 0.0            # set by main.gd so input is camera-relative
 var autopilot_target = null      # Vector3 or null; used by the --autopilot demo mode
+var touch_vector := Vector2.ZERO # from the on-screen joystick (phones/tablets)
+var touch_zoomies := false
+var touch_hop := false
 var _model: Node3D
 var _anim: AnimationPlayer
 var _walk := ""
@@ -29,7 +32,11 @@ func setup(model: Node3D) -> void:
 		_anim = players[0]
 		var names := _anim.get_animation_list()
 		if names.size() > 0:
+			# the glTF carries every action in the .blend; use this character's own walk cycle
 			_walk = names[0]
+			for n in names:
+				if n.contains("Cooper"):
+					_walk = n
 			_anim.get_animation(_walk).loop_mode = Animation.LOOP_LINEAR
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
@@ -47,16 +54,19 @@ func _physics_process(delta: float) -> void:
 		to.y = 0.0
 		input = Vector2(to.x, to.z).rotated(camera_yaw) if to.length() > 0.2 else Vector2.ZERO
 		input = input.limit_length(1.0)
+	if touch_vector.length() > 0.1:
+		input = touch_vector
 	var dir := Vector3(input.x, 0.0, input.y).rotated(Vector3.UP, camera_yaw)
-	var speed := ZOOMIES_SPEED if Input.is_action_pressed("zoomies") else WALK_SPEED
+	var speed := ZOOMIES_SPEED if (Input.is_action_pressed("zoomies") or touch_zoomies) else WALK_SPEED
 
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if is_on_floor():
-		if Input.is_action_just_pressed("hop"):
+		if Input.is_action_just_pressed("hop") or touch_hop:
 			velocity.y = HOP_VELOCITY
 	else:
 		velocity.y -= _gravity * delta
+	touch_hop = false
 	move_and_slide()
 
 	# shove anything light we bump into (the beach ball)

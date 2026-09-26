@@ -56,6 +56,55 @@ def shrink_textures(limit):
 shrink_textures(MAX_TEX)
 
 
+def bake_top_colour(color=(0.72, 0.68, 0.60)):
+    """The film recolours Janie's t-shirt with a shader mix (attribute 'is_top'), which glTF can't carry.
+    Paint that recolour into the outfit texture instead: every UV triangle of a 'top' face becomes cream,
+    keeping the fabric's shading from the original pixels."""
+    import numpy as np
+    ob = next((o for o in bpy.data.objects if o.type == "MESH" and "casualsuit" in o.name), None)
+    if not ob or "is_top" not in ob.data.attributes:
+        return
+    me = ob.data
+    img = None
+    for s in ob.material_slots:
+        for n in (s.material.node_tree.nodes if s.material and s.material.use_nodes else []):
+            if n.type == "TEX_IMAGE" and n.image and "diffuse" in n.image.name:
+                img = n.image
+    if img is None:
+        return
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32); img.pixels.foreach_get(px); px = px.reshape(h, w, 4)
+    top = np.empty(len(me.vertices), dtype=np.float32); me.attributes["is_top"].data.foreach_get("value", top)
+    uv = me.uv_layers.active.data
+    lum = px[..., :3] @ np.array([0.3, 0.59, 0.11], dtype=np.float32)
+    ref = float(np.median(lum)) or 0.5
+    mask = np.zeros((h, w), dtype=bool)
+    me.calc_loop_triangles()
+    for tri in me.loop_triangles:
+        if top[list(tri.vertices)].mean() < 0.5:
+            continue
+        p = np.array([uv[l].uv[:] for l in tri.loops]) * [w, h]
+        x0, y0 = np.floor(p.min(0)).astype(int); x1, y1 = np.ceil(p.max(0)).astype(int)
+        x0, y0 = max(x0, 0), max(y0, 0); x1, y1 = min(x1, w - 1), min(y1, h - 1)
+        if x1 < x0 or y1 < y0:
+            continue
+        ys, xs = np.mgrid[y0:y1 + 1, x0:x1 + 1] + 0.5
+        (ax, ay), (bx, by), (cx, cy) = p
+        d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+        if abs(d) < 1e-9:
+            continue
+        l1 = ((by - cy) * (xs - cx) + (cx - bx) * (ys - cy)) / d
+        l2 = ((cy - ay) * (xs - cx) + (ax - cx) * (ys - cy)) / d
+        inside = (l1 >= -0.01) & (l2 >= -0.01) & (1 - l1 - l2 >= -0.01)
+        mask[y0:y1 + 1, x0:x1 + 1] |= inside
+    shade = np.clip(0.6 + 0.4 * lum / ref, 0.4, 1.3)[..., None]
+    px[..., :3] = np.where(mask[..., None], np.array(color, dtype=np.float32) * shade, px[..., :3])
+    img.pixels.foreach_set(px.ravel()); img.update()
+    print("[EXPORT] painted Janie's top cream:", int(mask.sum()), "texels of", img.name)
+
+bake_top_colour()
+
+
 def select_only(objs):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:

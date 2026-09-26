@@ -32,7 +32,11 @@ func setup(model: Node3D, path_points: Array[Vector3], start_fraction: float) ->
 		_anim = players[0]
 		var names := _anim.get_animation_list()
 		if names.size() > 0:
+			# the glTF carries every action in the .blend; use this character's own walk cycle
 			_walk = names[0]
+			for n in names:
+				if n.contains("Janie"):
+					_walk = n
 			_anim.get_animation(_walk).loop_mode = Animation.LOOP_LINEAR
 			_anim.play(_walk)
 	_points = path_points
