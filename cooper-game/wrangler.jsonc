@@ -6,7 +6,7 @@
   "compatibility_date": "2026-09-25",
   "observability": { "enabled": true },
   "assets": { "directory": "export/web" },
-  // Kept off until Cloudflare Access (family-only login) protects the site.
-  "workers_dev": false,
+  // Protected by Cloudflare Access (Zero Trust app "janie-cooper": account members + Family emails).
+  "workers_dev": true,
   "preview_urls": false
 }
