@@ -1,0 +1,13 @@
+# third-party downloads (re-download: see README)
+addons/
+
+# generated Blender files and backups
+*.blend
+*.blend1
+*.blend2
+
+# render outputs and logs (large / reproducible)
+renders/
+*.mp4
+*.log
+__pycache__/
