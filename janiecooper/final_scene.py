@@ -193,8 +193,10 @@ for f in range(1, FRAMES + 2):
         ball_pivot.keyframe_insert("location", frame=f); ball_pivot.keyframe_insert("rotation_euler", frame=f)
         ball.keyframe_insert("rotation_euler", frame=f)
 
-# Cooper spots the ball and chases it: after the throw he pulls ahead of Janie toward it
-for f in range(THROW, FRAMES + 2, 2):
+# Cooper spots the ball and chases it: after the throw he pulls ahead of Janie toward it.
+# Must reuse the same (odd) frames as the walk keys above so these REPLACE them - keys on
+# interleaved frames made Cooper alternate between the two positions every frame (flicker).
+for f in range(THROW + (1 - THROW % 2), FRAMES + 2, 2):
     t = min(1.0, (f - THROW) / 40)
     bp, d = ball_pos(f)
     jp, _ = along(WALK_SPEED * (f - 1) / FPS)
