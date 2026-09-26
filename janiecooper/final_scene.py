@@ -88,11 +88,12 @@ for f in range(1, FRAMES + 2, 2):
     key("mixamorig:RightLeg", f, x=6 + 38 * max(0, -c) ** 1.5)
     key("mixamorig:LeftFoot", f, x=10 * s)
     key("mixamorig:RightFoot", f, x=-10 * s)
-    # arms relaxed at the sides, swinging opposite to the legs
-    key("mixamorig:LeftArm", f, z=-55, x=-14 * s)
-    key("mixamorig:RightArm", f, z=55, x=14 * s)
-    key("mixamorig:LeftForeArm", f, z=-12)
-    key("mixamorig:RightForeArm", f, z=12)
+    # arms hang close to the body and swing opposite to the legs; elbows stay softly bent
+    # and bend a little more as each arm swings forward (pose tested in tools/arm_test.py)
+    key("mixamorig:LeftArm", f, z=-74, x=-11 * s)
+    key("mixamorig:RightArm", f, z=74, x=11 * s)
+    key("mixamorig:LeftForeArm", f, z=0, x=-(10 + 10 * max(0.0, -s)))
+    key("mixamorig:RightForeArm", f, z=0, x=-(10 + 10 * max(0.0, s)))
     key("mixamorig:Spine", f, z=0, x=2)
     key("mixamorig:Head", f, x=-3)
 
@@ -221,8 +222,9 @@ def mid(f):
     return p - cam_side * 0.35, d
 m1, d1 = mid(1); m100, _ = mid(100); m150, _ = mid(150); mE, dE = mid(FRAMES)
 def v3(v2, z): return Vector((v2.x, v2.y, z))
-cam_key(1,   v3(m1 + cam_side * 70 - d1 * 45, 48), v3(m1, 0.0), 30)
-cam_key(60,  v3(m1 + cam_side * 30 - d1 * 18, 16), v3(mid(60)[0], 0.4), 32)
+# opening: arrive like a visitor - down over Niguel Heights Blvd, low across the entrance footbridge and creek
+cam_key(1,   Vector((-112.0, 10.0, 30.0)), Vector((-68.0, 2.0, 0.0)), 30)
+cam_key(55,  Vector((-80.0, -5.0, 6.5)), Vector((-60.0, 1.0, 0.6)), 30)
 cam_key(115, v3(m100 + cam_side * 7 - d1 * 2.5, 2.4), v3(m100, 0.85), 38)
 cam_key(170, v3(m150 + cam_side * 4.6 + d1 * 0.6, 1.35), v3(m150, 0.8), 40)
 cam_key(FRAMES, v3(mE + cam_side * 4.2 + dE * 1.6, 1.25), v3(mE, 0.8), 42)
@@ -282,7 +284,7 @@ bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "final.blend"))
 
 if MODE == "stills":
     os.makedirs(os.path.join(HERE, "renders"), exist_ok=True)
-    for f in (1, 90, 150, 280):
+    for f in (1, 40, 80, 150, 280):
         sc.frame_set(f)
         sc.render.filepath = os.path.join(HERE, "renders", f"final_f{f:03d}.png")
         bpy.ops.render.render(write_still=True)

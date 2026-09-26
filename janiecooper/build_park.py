@@ -327,6 +327,8 @@ def build():
         box(V, F, M, (sx0 + sx, sy0, 0.62), (0.5, 0.22 if i in (1, 2) else 0.18, 0.05 if i in (1, 2) else 0.2), 0, 3)
     make_obj("Playground", V, F, [M_PLAYPST, M_PLAYYEL, M_PLAYRED, M_BLACK], M, coll=C_FURN)
 
+    build_entrance_creek()
+
     # ------------------------------------------------ boundary wall + white railing (not along the boulevard)
     blvd = [pts for k, n, pts in roads if n == "Niguel Heights Boulevard"]
     V, F, M = [], [], []
@@ -561,6 +563,87 @@ def build():
     sc.render.resolution_x, sc.render.resolution_y = 1280, 720
     return sc
 
+M_DG      = varied_mat("DecomposedGranite", (0.47, 0.37, 0.24), (0.58, 0.47, 0.32), scale=3, rough=0.95, bump=0.25, bump_scale=90)
+M_ROCK    = varied_mat("RiverRock", (0.28, 0.25, 0.21), (0.52, 0.47, 0.40), scale=4, rough=0.8, bump=0.4, bump_scale=25, per_object=True)
+M_TIMBER  = varied_mat("BridgeTimber", (0.20, 0.13, 0.08), (0.30, 0.21, 0.13), scale=6, rough=0.85, bump=0.3, bump_scale=40)
+M_CLUMP   = varied_mat("GrassClump", (0.16, 0.24, 0.07), (0.34, 0.36, 0.14), scale=2, rough=0.8, per_object=True)
+
+def build_entrance_creek():
+    """Entrance from Niguel Heights Blvd (from the family's photo): a rock-lined dry creek crossing the entry
+    walkway, a small timber footbridge over it, and clumps of ornamental grass and boulders along the banks.
+    The creek isn't in OpenStreetMap; its line is placed from the photo, crossing the entry walk near x=-68."""
+    coll = collection("EntranceCreek")
+    rnd = random.Random(42)
+    creek = [Vector(p) for p in ((-73.5, -40.0), (-70.0, -26.0), (-67.0, -12.0), (-68.0, 2.2),
+                                  (-66.0, 14.0), (-61.5, 26.0), (-59.0, 34.0))]
+    creek = [creek[0]] + [creek[i].lerp(creek[i + 1], t / 6) for i in range(len(creek) - 1) for t in range(1, 7)]
+    # dry creek bed: decomposed granite band, slightly sunk look via darker centre stones
+    V, F = ribbon(creek, 4.2, 0.015)
+    make_obj("CreekBed", V, F, [M_DG], coll=coll)
+    # river rocks along the bed, boulders on the edges (one mesh, many small shells)
+    bm = bmesh.new()
+    for i, p in enumerate(creek[:-1]):
+        d = (creek[i + 1] - p).normalized(); side = Vector((-d.y, d.x))
+        for _ in range(24):
+            q = p + d * rnd.uniform(0, 1.6) + side * rnd.gauss(0, 0.75)
+            r = rnd.uniform(0.06, 0.2)
+            m = Matrix.Translation((q.x, q.y, r * 0.35)) @ Matrix.Diagonal((rnd.uniform(1, 1.5), rnd.uniform(0.8, 1.2), 0.6, 1))
+            bmesh.ops.create_icosphere(bm, subdivisions=1, radius=r, matrix=m)
+        if i % 3 == 0:
+            for sgn in (1, -1):
+                q = p + side * sgn * rnd.uniform(1.7, 2.3)
+                r = rnd.uniform(0.3, 0.55)
+                m = Matrix.Translation((q.x, q.y, r * 0.4)) @ Matrix.Diagonal((1.3, 1.0, 0.75, 1))
+                bmesh.ops.create_icosphere(bm, subdivisions=2, radius=r, matrix=m)
+    for v in bm.verts:
+        v.co += Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))) * 0.02
+    me = bpy.data.meshes.new("CreekRocks"); bm.to_mesh(me); bm.free()
+    me.materials.append(M_ROCK)
+    coll.objects.link(bpy.data.objects.new("CreekRocks", me))
+    # ornamental grass clumps (one prototype, instanced) along both banks
+    bm = bmesh.new()
+    for k in range(120):
+        a = rnd.uniform(0, 2 * math.pi); lean = rnd.uniform(0.15, 0.55); hgt = rnd.uniform(0.5, 0.85)
+        base = Vector((math.cos(a) * 0.08, math.sin(a) * 0.08, 0))
+        tip = base + Vector((math.cos(a) * lean, math.sin(a) * lean, hgt))
+        w = Vector((-math.sin(a), math.cos(a), 0)) * 0.035
+        vs = [bm.verts.new(base - w), bm.verts.new(base + w), bm.verts.new(tip)]
+        bm.faces.new(vs)
+    me = bpy.data.meshes.new("GrassClumpProto"); bm.to_mesh(me); bm.free()
+    me.materials.append(M_CLUMP)
+    for i, p in enumerate(creek[:-1]):
+        d = (creek[i + 1] - p).normalized(); side = Vector((-d.y, d.x))
+        for sgn in (1, -1, 1, -1):
+            if rnd.random() < 0.85:
+                q = p + d * rnd.uniform(0, 1.5) + side * sgn * rnd.uniform(2.2, 3.8)
+                if abs(q.y - 2.2) < 2.0 and -72 < q.x < -63:
+                    continue                       # keep the walkway clear
+                ob = bpy.data.objects.new("GrassClump", me)
+                ob.location = (q.x, q.y, 0); ob.rotation_euler.z = rnd.uniform(0, 6.3)
+                s = rnd.uniform(0.8, 1.35); ob.scale = (s, s, s)
+                coll.objects.link(ob)
+    # timber footbridge where the entry walk crosses the creek (walk runs east-west here)
+    cx, cy, L, W, H = -68.0, 2.2, 5.6, 2.3, 0.32
+    V, F, M = [], [], []
+    box(V, F, M, (cx, cy, H), (L - 1.2, W, 0.1), 0, 0)                           # deck
+    for k in range(int((L - 1.2) / 0.16)):                                       # deck boards
+        box(V, F, M, (cx - (L - 1.2) / 2 + 0.08 + k * 0.16, cy, H + 0.055), (0.13, W, 0.012), 0, 0)
+    for sgn in (1, -1):                                                          # ramps at each end
+        b0 = len(V); x0 = cx + sgn * (L - 1.2) / 2; x1 = cx + sgn * L / 2
+        for (x, z) in ((x0, H + 0.05), (x1, 0.03)):
+            V.append((x, cy - W / 2, z)); V.append((x, cy + W / 2, z))
+        F.append((b0, b0 + 1, b0 + 3, b0 + 2)); M.append(0)
+    for side in (1, -1):                                                         # railings with posts
+        y = cy + side * (W / 2 - 0.05)
+        for px in (cx - 2.2, cx - 1.1, cx, cx + 1.1, cx + 2.2):
+            box(V, F, M, (px, y, H + 0.5), (0.1, 0.1, 1.0), 0, 0)
+        box(V, F, M, (cx, y, H + 1.0), (4.6, 0.12, 0.08), 0, 0)
+        box(V, F, M, (cx, y, H + 0.45), (4.4, 0.05, 0.05), 0, 0)
+        for k in range(22):                                                      # slats
+            box(V, F, M, (cx - 2.1 + k * 0.2, y, H + 0.72), (0.03, 0.03, 0.5), 0, 0)
+    make_obj("Footbridge", V, F, [M_TIMBER], M, coll=coll)
+
+
 def add_camera(sc, name, loc, target, lens=35):
     cd = bpy.data.cameras.new(name); cd.lens = lens; cd.clip_end = 2000
     cam = bpy.data.objects.new(name, cd); sc.collection.objects.link(cam)
@@ -575,6 +658,7 @@ if __name__ == "__main__":
         "aerial": add_camera(sc, "CamAerial", (-150, 95, 75), (0, -5, 0), 32),
         "ground": add_camera(sc, "CamGround", (30, 8, 1.5), (-40, -12, 3), 28),
         "side":   add_camera(sc, "CamSide", (40, -25, 1.6), (-20, 30, 3), 28),
+        "entrance": add_camera(sc, "CamEntrance", (-58, -14, 1.6), (-69, 6, 0.6), 30),
     }
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "park.blend"))
     if "stills" in sys.argv:
