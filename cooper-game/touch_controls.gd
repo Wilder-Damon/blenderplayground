@@ -3,6 +3,7 @@ extends Control
 ## drag on the right half to turn the camera, and buttons for zoomies and hop.
 
 signal hop
+signal photo
 
 const RADIUS := 90.0
 
@@ -24,6 +25,8 @@ func _ready() -> void:
 	zoom.button_up.connect(func(): zoomies = false)
 	var jump := _make_button("Hop", Vector2(-170, -150))
 	jump.pressed.connect(func(): hop.emit())
+	var snap := _make_button("Photo", Vector2(-170, -290))
+	snap.pressed.connect(func(): photo.emit())
 
 
 func _make_button(label: String, offset: Vector2) -> Button:

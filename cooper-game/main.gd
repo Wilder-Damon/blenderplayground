@@ -8,6 +8,7 @@ extends Node3D
 const CooperScript := preload("res://cooper.gd")
 const JanieScript := preload("res://janie.gd")
 const TouchScript := preload("res://touch_controls.gd")
+const PhotoScript := preload("res://photo_mode.gd")
 
 var cooper: CharacterBody3D
 var janie: Node3D
@@ -28,6 +29,8 @@ var quality := 1
 var fps_label: Label
 var touch: Control
 var _hud_layer: CanvasLayer
+var photo: Node
+var photo_active := false
 var _help: Label
 var _env: Environment
 var _sun: DirectionalLight3D
@@ -77,6 +80,12 @@ func _ready() -> void:
 	camera.far = 3000.0
 	add_child(camera)
 	_setup_hud()
+	photo = Node.new()
+	photo.set_script(PhotoScript)
+	photo.main = self
+	add_child(photo)
+	if "--photo-test" in OS.get_cmdline_user_args():
+		get_tree().create_timer(3.0).timeout.connect(func(): photo.take_photo())
 
 
 func _to_godot(pts: Array, h: float) -> Array[Vector3]:
@@ -90,7 +99,7 @@ func _setup_input() -> void:
 	var binds := {
 		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN],
 		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
-		"zoomies": [KEY_SHIFT], "hop": [KEY_SPACE], "cam_left": [KEY_Q], "cam_right": [KEY_E],
+		"zoomies": [KEY_SHIFT], "hop": [KEY_SPACE], "cam_left": [KEY_Q], "cam_right": [KEY_E], "photo": [KEY_P],
 	}
 	for action in binds:
 		if not InputMap.has_action(action):
@@ -231,7 +240,7 @@ func _setup_hud() -> void:
 	toast.add_theme_constant_override("outline_size", 12)
 	layer.add_child(toast)
 	var help := Label.new()
-	help.text = "WASD: waddle   Shift: zoomies   Space: hop   Q/E: camera   F2: quality   F3: fps   F11: fullscreen      Map data © OpenStreetMap contributors"
+	help.text = "WASD: waddle   Shift: zoomies   Space: hop   Q/E: camera   P: photo   F2: quality   F3: fps   F11: fullscreen      Map data © OpenStreetMap contributors"
 	help.anchor_top = 1.0; help.anchor_bottom = 1.0
 	help.offset_top = -34; help.offset_left = 24
 	help.add_theme_font_size_override("font_size", 16)
@@ -322,7 +331,8 @@ func _enable_touch() -> void:
 	touch.set_script(TouchScript)
 	_hud_layer.add_child(touch)
 	touch.hop.connect(func(): cooper.touch_hop = true)
-	_help.text = "Drag left side: waddle   Drag right side: camera   Buttons: zoomies / hop      Map data © OpenStreetMap contributors"
+	touch.photo.connect(func(): photo.take_photo())
+	_help.text = "Drag left side: waddle   Drag right side: camera   Buttons: zoomies / hop / photo      Map data © OpenStreetMap contributors"
 
 
 func _input(event: InputEvent) -> void:
@@ -331,6 +341,14 @@ func _input(event: InputEvent) -> void:
 		if quality != 0:
 			quality = 0
 			_apply_quality()
+
+
+func hud_layer() -> CanvasLayer:
+	return _hud_layer
+
+
+func show_toast(text: String, seconds: float) -> void:
+	_show_toast(text, seconds)
 
 
 func _update_score() -> void:
@@ -356,6 +374,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if photo_active:
+		return
+	if Input.is_action_just_pressed("photo"):
+		photo.take_photo()
+		return
 	cam_yaw += (Input.get_action_strength("cam_left") - Input.get_action_strength("cam_right")) * 1.8 * delta
 	if _autopilot:
 		# steer to the far side of the ball, then push it towards Janie
