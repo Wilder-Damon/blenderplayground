@@ -21,6 +21,13 @@ var _intro: Control
 var _autopilot := false
 var _dbg_t := 0.0
 
+# Quality presets (F2 cycles, F3 shows fps). Upscaling renders fewer pixels and FSR 2 rebuilds the detail.
+const QUALITY_NAMES := ["Fast", "Balanced", "Pretty"]
+var quality := 1
+var fps_label: Label
+var _env: Environment
+var _sun: DirectionalLight3D
+
 
 func _ready() -> void:
 	_autopilot = "--autopilot" in OS.get_cmdline_user_args()
@@ -111,6 +118,7 @@ func _setup_environment() -> void:
 	env.fog_light_color = Color(1.0, 0.8, 0.62)
 	env.fog_density = 0.0025
 	env.fog_sky_affect = 0.2
+	_env = env
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -122,6 +130,7 @@ func _setup_environment() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120.0
 	add_child(sun)
+	_sun = sun
 	var elev := deg_to_rad(14.0)
 	var az := deg_to_rad(250.0)          # compass bearing to the sun
 	var to_sun := Vector3(sin(az) * cos(elev), sin(elev), -cos(az) * cos(elev))
@@ -218,15 +227,72 @@ func _setup_hud() -> void:
 	toast.add_theme_constant_override("outline_size", 12)
 	layer.add_child(toast)
 	var help := Label.new()
-	help.text = "WASD: waddle   Shift: zoomies   Space: hop   Q/E or right-drag: camera        Map data © OpenStreetMap contributors"
+	help.text = "WASD: waddle   Shift: zoomies   Space: hop   Q/E: camera   F2: quality   F3: fps   F11: fullscreen      Map data © OpenStreetMap contributors"
 	help.anchor_top = 1.0; help.anchor_bottom = 1.0
 	help.offset_top = -34; help.offset_left = 24
 	help.add_theme_font_size_override("font_size", 16)
 	help.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	help.add_theme_constant_override("outline_size", 6)
 	layer.add_child(help)
+	fps_label = Label.new()
+	fps_label.anchor_left = 1.0; fps_label.anchor_right = 1.0
+	fps_label.offset_left = -360; fps_label.offset_right = -20; fps_label.offset_top = 18
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_label.add_theme_font_size_override("font_size", 18)
+	fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	fps_label.add_theme_constant_override("outline_size", 6)
+	fps_label.visible = false
+	layer.add_child(fps_label)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--quality="):
+			quality = clampi(int(a.get_slice("=", 1)), 0, 2)
+	_apply_quality()
 	_update_score()
 	_show_toast("Cooper's Park Run\nBring the ball back to Janie!", 4.0)
+
+
+func _apply_quality() -> void:
+	var vp := get_viewport()
+	match quality:
+		0:  # Fast: 50% resolution upscaled with FSR 2, light effects
+			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+			vp.scaling_3d_scale = 0.5
+			vp.msaa_3d = Viewport.MSAA_DISABLED
+			_env.ssao_enabled = false
+			_env.glow_enabled = false
+			_sun.directional_shadow_max_distance = 60.0
+			RenderingServer.directional_shadow_atlas_set_size(2048, true)
+		1:  # Balanced: 67% resolution with FSR 2 (it does its own anti-aliasing)
+			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+			vp.scaling_3d_scale = 0.67
+			vp.msaa_3d = Viewport.MSAA_DISABLED
+			_env.ssao_enabled = false
+			_env.glow_enabled = true
+			_sun.directional_shadow_max_distance = 90.0
+			RenderingServer.directional_shadow_atlas_set_size(4096, true)
+		2:  # Pretty: native resolution, everything on
+			vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+			vp.scaling_3d_scale = 1.0
+			vp.msaa_3d = Viewport.MSAA_2X
+			_env.ssao_enabled = true
+			_env.glow_enabled = true
+			_sun.directional_shadow_max_distance = 120.0
+			RenderingServer.directional_shadow_atlas_set_size(4096, true)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.echo:
+		return
+	if k.physical_keycode == KEY_F2:
+		quality = (quality + 1) % 3
+		_apply_quality()
+		_show_toast("Quality: %s" % QUALITY_NAMES[quality], 1.2)
+	elif k.physical_keycode == KEY_F3:
+		fps_label.visible = not fps_label.visible
+	elif k.physical_keycode == KEY_F11:
+		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 
 func _update_score() -> void:
@@ -285,3 +351,7 @@ func _process(delta: float) -> void:
 	if _toast_time > 0.0:
 		_toast_time -= delta
 		toast.modulate.a = clamp(_toast_time / 0.6, 0.0, 1.0)
+	if _autopilot and Engine.get_process_frames() % 120 == 0:
+		print("[FPS] %d  (%s, quality %s)" % [Engine.get_frames_per_second(), get_viewport().get_visible_rect().size, QUALITY_NAMES[quality]])
+	if fps_label.visible:
+		fps_label.text = "%d fps  ·  %s  ·  F2: quality" % [Engine.get_frames_per_second(), QUALITY_NAMES[quality]]
